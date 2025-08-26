@@ -1,6 +1,6 @@
 {
   "name": "news-extracter",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "HTML Website Text Extracter.",
   "main": "index.js",
   "scripts": {
@@ -9,9 +9,17 @@
   "author": "Armando Peralta",
   "license": "ISC",
   "devDependencies": {
+    "@types/node": "^24.3.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsc": "^2.0.4",
     "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "axios": "^1.11.0",
+    "cheerio": "^1.1.2",
+    "p-limit": "^7.1.0",
+    "path": "^0.12.7",
+    "socks-proxy-agent": "^8.0.5"
   }
 }
