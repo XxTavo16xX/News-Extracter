@@ -1,6 +1,6 @@
 {
   "name": "news-extracter",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "HTML Website Text Extracter.",
   "main": "index.js",
   "scripts": {
