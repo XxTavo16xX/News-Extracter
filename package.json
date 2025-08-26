@@ -1,0 +1,11 @@
+{
+  "name": "news-extracter",
+  "version": "0.0.0",
+  "description": "HTML Website Text Extracter.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Armando Peralta",
+  "license": "ISC"
+}
