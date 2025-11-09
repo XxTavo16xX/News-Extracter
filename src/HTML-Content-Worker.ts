@@ -2,7 +2,7 @@
 // * Dependencies Required
 
 import { parentPort, workerData } from "worker_threads";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { SocksProxyAgent } from "socks-proxy-agent";
 import { ObjectId } from "mongodb";
 import * as cheerio from "cheerio";
@@ -22,9 +22,9 @@ import Database from "./Database";
     const url: string = workerData.url;
 
     console.log(`[${id.toString()}:Worker] Initialized`);
-    
+
     try {
-        
+
         const result = await process_Web_Page(id, url);
         parentPort.postMessage(result);
 
@@ -98,7 +98,19 @@ function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched
 
         } catch (error) {
 
-            return reject(error);
+            if (axios.isAxiosError(error)) {
+
+                const axiosError = error as AxiosError;
+                if (axiosError.response) {
+                    console.warn(`[${id.toString()}:Worker] HTTP ${axiosError.response.status} for ${url}`);
+                    return { fetched: false, data: null };
+                }
+
+            } else {
+
+                return reject(error);
+
+            }
 
         }
 
@@ -112,11 +124,11 @@ function save_HTML_Fetched(id: ObjectId, url: string, fetched_html: any): Promis
         try {
 
             console.log(`[${id.toString()}:Worker] Extracting Fetched Web Page Content: ${url}`);
-            
+
             const { lang, content } = extractContent(fetched_html);
-            
+
             if (lang !== "unknown" && content != "") {
-                
+
                 console.log(`[${id.toString()}:Worker] Saving Extracted Fetched Web Page Content: ${url}`);
 
                 const newsAt_Indexed_Content = await Database.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
@@ -125,7 +137,7 @@ function save_HTML_Fetched(id: ObjectId, url: string, fetched_html: any): Promis
 
                 return resolve({ saved: saveResult.acknowledged });
 
-            }else {
+            } else {
 
                 return resolve({ saved: false })
 
