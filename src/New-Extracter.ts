@@ -31,9 +31,9 @@ import path from "path";
 
 // * Const Required
 
-const news_file_path = "./src/assets/news.json";
-const worker_path = "./src/HTML-Content-Worker.ts"
-const outputDir = "D:\\WDN\\News-Extracter\\news";
+const news_file_path = process.env.NEWS_FILE_PATH as string;
+const worker_path = process.env.WORKER_PATH as string;
+const outputDir = process.env.NEWS_FILES_OUTPUT_PATH as string;
 
 
 class News_Extracter {

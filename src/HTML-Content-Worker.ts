@@ -5,9 +5,9 @@ import * as cheerio from "cheerio";
 import net from "net";
 
 // TOR Setup
-const SOCKS_PROXY = "socks5h://127.0.0.1:9050";
-const CONTROL_PORT = 9051;
-const CONTROL_PASSWORD = "MiPassword123";
+const SOCKS_PROXY = process.env.SOCKS_PROXY as string;
+const CONTROL_PORT = Number(process.env.CONTROL_PORT as string);
+const CONTROL_PASSWORD = process.env.CONTROL_PASSWORD as string;
 
 
 async function rotateTorIP() {
