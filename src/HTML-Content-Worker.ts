@@ -47,7 +47,7 @@ function process_Web_Page(id: ObjectId, url: string): Promise<{ fetched: boolean
 
             if (html_fetched.fetched === false || html_fetched.data === null) return resolve({ fetched: false, saved: false });
 
-            const save_result = await save_HTML_Fetched(id, url, html_fetched);
+            const save_result = await save_HTML_Fetched(id, url, html_fetched.data);
 
             return resolve({ fetched: true, saved: save_result.saved });
 
