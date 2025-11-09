@@ -22,10 +22,18 @@ import Database from "./Database";
     const url: string = workerData.url;
 
     console.log(`[${id.toString()}:Worker] Initialized`);
+    
+    try {
+        
+        const result = await process_Web_Page(id, url);
+        parentPort.postMessage(result);
 
-    const result = await process_Web_Page(id, url);
+    } catch (error) {
 
-    parentPort.postMessage(result);
+        console.error(`[${id.toString()}:Worker] Fatal error:`, error);
+        parentPort.postMessage({ fetched: false, saved: false, error: error });
+
+    }
 
 })();
 
@@ -104,12 +112,12 @@ function save_HTML_Fetched(id: ObjectId, url: string, fetched_html: any): Promis
         try {
 
             console.log(`[${id.toString()}:Worker] Saving Fetched Web Page Content: ${url}`);
-            
+
             const { lang, content } = extractContent(fetched_html);
-            
+
             const newsAt_Indexed_Content = await Database.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
             const saveResult = await newsAt_Indexed_Content.insertOne({ _id: id, url, lang, content });
-            
+
             console.log(`[${id.toString()}:Worker] Fetched Web Page ${saveResult.acknowledged === true ? "saved successfully" : "wasn't saved"}`);
 
             return resolve({ saved: saveResult.acknowledged });
