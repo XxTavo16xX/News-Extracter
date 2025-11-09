@@ -106,11 +106,27 @@ class News_Extracter {
 
             const worker = new Worker(worker_path, { workerData: unfetched_webpage, execArgv: ["-r", "ts-node/register"] });
 
-            worker.on("message", (msg) => {
+            worker.on("message", async (msg: { fetched: boolean, saved: boolean, error?: unknown }) => {
 
-                const outputFile = path.join(outputDir, `news_${unfetched_webpage._id}.json`);
-                fs.writeFileSync(outputFile, JSON.stringify(msg, null, 2), "utf-8");
-                resolve(msg);
+                if (msg.fetched === true && msg.saved === true) {
+
+                    console.log(`[Worker:${unfetched_webpage._id}] Fetched Successfully.`);
+
+                    const newsAt_Indexed_Content = await Database.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
+
+                    await newsAt_Indexed_Content.updateOne({ _id: unfetched_webpage._id }, { $set: { fetched: true } });
+
+                    this.total_unfetched_pages = Math.max(this.total_unfetched_pages - 1, 0);
+
+                    console.log(`[Worker:${unfetched_webpage._id}] Completed. Remaining pages: ${this.total_unfetched_pages}`);
+                    
+                    resolve(msg);
+                    
+                }else {
+                    
+                    console.log(`[Worker:${unfetched_webpage._id}] Unable to Fetch Web page content.`);
+
+                }
 
             });
 
