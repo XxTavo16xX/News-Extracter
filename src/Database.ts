@@ -5,49 +5,62 @@ import { MongoClient, Collection, Document } from "mongodb"
 
 class Database {
 
-    private static Database_Instance: Database;
+    private static instance: Database | null = null;
+    private client: MongoClient | null = null;
+    private connected: boolean = false;
 
-    public static get_Connection(database_name: string, collection_name: string): Promise<Collection<Document>> {
 
-        if (!Database.Database_Instance) {
+    public static async init(mongoUrl?: string) {
 
-            Database.Database_Instance = new Database();
+        if (!Database.instance) {
+
+            Database.instance = new Database();
+            await Database.instance._connect(mongoUrl);
 
         }
 
-        return Database.Database_Instance.get_Connection(database_name, collection_name);
+        return Database.instance;
 
     }
 
-    private client_Connection: MongoClient;
+    public static get_Instance(): Database {
+        if (!Database.instance) throw new Error("Database not initialized. Call Database.init() first.");
+        return Database.instance;
+    }
 
-    constructor() {
+    constructor() { }
 
-        this.client_Connection = new MongoClient(process.env.MONGODB_URL as string);
+    private async _connect(mongoUrl?: string) {
+
+        if (this.connected) return;
+        const url = mongoUrl || process.env.MONGODB_URL;
+        if (!url) throw new Error("MONGODB_URL not defined");
+        this.client = new MongoClient(url, { maxPoolSize: 20 });
+        await this.client.connect();
+        this.connected = true;
+        console.log("Database connected");
 
     }
 
-    public get_Connection(database_name: string, collection_name: string): Promise<Collection<Document>> {
+    public async get_Connection(database_name: string, collection_name: string): Promise<Collection<Document>> {
 
-        return new Promise((resolve, reject) => {
+        if (!this.client) throw new Error("MongoClient not initialized");
+        const db = this.client.db(database_name);
+        return db.collection(collection_name);
 
+    }
+
+    public async close(): Promise<void> {
+        if (this.client) {
             try {
-
-                const db = this.client_Connection.db(database_name);
-                const collection = db.collection(collection_name);
-
-                return resolve(collection);
-
-            } catch (error) {
-
-                return reject(error);
-
+                await this.client.close();
+                this.connected = false;
+                console.log("Database connection closed");
+            } catch (e) {
+                console.warn("Error closing DB connection:", e);
             }
-
-        })
-
+        }
     }
-
 
 }
 
