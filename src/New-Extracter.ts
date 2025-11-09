@@ -28,7 +28,7 @@ class News_Extracter {
     private static total_unfetched_pages: number = 0;
     private static limit = pLimit(1);
 
-    public static init() {
+    public static async init() {
 
         // * Getting Device Specs
 
@@ -36,7 +36,7 @@ class News_Extracter {
 
         // * Reading File
 
-        this.get_URLs_To_Fetch_List();
+        await this.get_URLs_To_Fetch_List();
 
         // * Initializing Fetch Process
 
