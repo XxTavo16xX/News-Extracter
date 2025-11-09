@@ -1,7 +1,6 @@
 
 // * Dependencies Required
 
-import { ObjectId } from "mongodb";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -101,7 +100,7 @@ class News_Extracter {
 
     }
 
-    private static run_Worker(unfetched_webpage: { _id: ObjectId, url: string, fetched: boolean }): Promise<unknown> {
+    private static run_Worker(unfetched_webpage: Indexed_Content_News): Promise<unknown> {
 
         return new Promise((resolve, reject) => {
 

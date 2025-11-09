@@ -1,50 +1,129 @@
+
+// * Dependencies Required
+
 import { parentPort, workerData } from "worker_threads";
 import axios from "axios";
 import { SocksProxyAgent } from "socks-proxy-agent";
+import { ObjectId } from "mongodb";
 import * as cheerio from "cheerio";
-import net from "net";
 
-// TOR Setup
-const SOCKS_PROXY = process.env.SOCKS_PROXY as string;
-const CONTROL_PORT = Number(process.env.CONTROL_PORT as string);
-const CONTROL_PASSWORD = process.env.CONTROL_PASSWORD as string;
+// * Module Required
 
+import TOR_Network_Controller from "./TOR";
+import Database from "./Database";
 
-async function rotateTorIP() {
-    return new Promise<void>((resolve, reject) => {
-        const socket = net.connect(CONTROL_PORT, "127.0.0.1", () => {
-            socket.write(`AUTHENTICATE "${CONTROL_PASSWORD}"\r\n`);
-            socket.write("SIGNAL NEWNYM\r\n");
-            socket.write("QUIT\r\n");
-            socket.end();
-            resolve();
-        });
-        socket.on("error", reject);
-    });
+// * Worker Methods
+
+(async () => {
+
+    if (!parentPort) return;
+
+    const id = workerData._id as ObjectId;
+    const url: string = workerData.url;
+
+    console.log(`[${id}:Worker] Initialized`);
+
+    const result = await process_Web_Page(id, url);
+
+    parentPort.postMessage(result);
+
+})();
+
+function process_Web_Page(id: ObjectId, url: string): Promise<{ fetched: boolean, saved: boolean }> {
+
+    return new Promise(async (resolve, reject) => {
+
+        try {
+
+            const html_fetched = await fetchPage(id, url);
+
+            if (html_fetched.fetched === false || html_fetched.data === null) return resolve({ fetched: false, saved: false });
+
+            const save_result = await save_HTML_Fetched(id, url, html_fetched);
+
+            return resolve({ fetched: true, saved: save_result.saved });
+
+        } catch (error: any) {
+
+            console.error(`[Worker] Error fetching ${url}:`, error.message);
+
+            return reject(error);
+
+        }
+
+    })
+
 }
 
-async function fetchPage(url: string, rotate= false) {
-    // Rotar IP si ya pasó el intervalo
-    if (rotate) await rotateTorIP();
 
-    const agent = new SocksProxyAgent(SOCKS_PROXY);
+function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched: boolean, data: any }> {
 
-    const response = await axios.get(url, {
-        httpAgent: agent,
-        httpsAgent: agent,
-        timeout: 20000,
-        headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-            "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Connection": "keep-alive"
+    return new Promise(async (resolve, reject) => {
+
+        try {
+
+            console.log(`[${id}:Worker] Fetching: ${url}`);
+
+            if (rotate) await TOR_Network_Controller.rotateTorIP();
+
+            const agent = new SocksProxyAgent(process.env.SOCKS_PROXY as string);
+            const agent_headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Connection": "keep-alive"
+            }
+
+            const response = await axios.get(url, { httpAgent: agent, httpsAgent: agent, timeout: 20000, headers: agent_headers });
+
+            console.log(`[${id}:Worker] Fetch Result: ${response.status}`);
+
+            if (response.status >= 200 && response.status <= 299) {
+
+                return resolve({ fetched: true, data: response.data });
+
+            } else {
+
+                return resolve({ fetched: false, data: null });
+
+            }
+
+        } catch (error) {
+
+            return reject(error);
+
         }
-    });
 
-    return response.data;
+    })
+}
+
+function save_HTML_Fetched(id: ObjectId, url: string, fetched_html: any): Promise<{ saved: boolean }> {
+
+    return new Promise(async (resolve, reject) => {
+
+        try {
+
+            console.log(`[${id}:Worker] Saving Fetched Web Page Content: ${url}`);
+
+            const { lang, content } = extractContent(fetched_html);
+
+            const newsAt_Indexed_Content = await Database.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
+            const saveResult = await newsAt_Indexed_Content.insertOne({ _id: id, url, lang, content });
+
+            return resolve({ saved: saveResult.acknowledged });
+
+        } catch (error) {
+
+            return reject(error);
+
+        }
+
+    })
+
 }
 
 function extractContent(html: string) {
+
     const $ = cheerio.load(html);
     const lang = $("html").attr("lang") || "unknown";
 
@@ -62,26 +141,5 @@ function extractContent(html: string) {
     const content = texts.join("\n");
 
     return { lang, content };
+
 }
-
-async function processUrl(url: string) {
-    try {
-        console.log(`[Worker] Fetching: ${url}`);
-
-        const html = await fetchPage(url);
-        const { lang, content } = extractContent(html);
-
-        return { url, lang, content };
-    } catch (error: any) {
-        console.error(`[Worker] Error fetching ${url}:`, error.message);
-        return { url, error: error.message };
-    }
-}
-
-(async () => {
-    if (!parentPort) return;
-
-    const url: string = workerData.url;
-    const result = await processUrl(url);
-    parentPort.postMessage(result);
-})();
