@@ -111,16 +111,25 @@ function save_HTML_Fetched(id: ObjectId, url: string, fetched_html: any): Promis
 
         try {
 
-            console.log(`[${id.toString()}:Worker] Saving Fetched Web Page Content: ${url}`);
-
+            console.log(`[${id.toString()}:Worker] Extracting Fetched Web Page Content: ${url}`);
+            
             const { lang, content } = extractContent(fetched_html);
+            
+            if (lang !== "unknown" && content != "") {
+                
+                console.log(`[${id.toString()}:Worker] Saving Extracted Fetched Web Page Content: ${url}`);
 
-            const newsAt_Indexed_Content = await Database.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
-            const saveResult = await newsAt_Indexed_Content.insertOne({ _id: id, url, lang, content });
+                const newsAt_Indexed_Content = await Database.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
+                const saveResult = await newsAt_Indexed_Content.insertOne({ _id: id, url, lang, content });
+                console.log(`[${id.toString()}:Worker] Status Extracted Fetched Web Page Content ${saveResult.acknowledged === true ? "saved successfully" : "wasn't saved"}`);
 
-            console.log(`[${id.toString()}:Worker] Fetched Web Page ${saveResult.acknowledged === true ? "saved successfully" : "wasn't saved"}`);
+                return resolve({ saved: saveResult.acknowledged });
 
-            return resolve({ saved: saveResult.acknowledged });
+            }else {
+
+                return resolve({ saved: false })
+
+            }
 
         } catch (error) {
 
