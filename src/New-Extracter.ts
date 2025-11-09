@@ -7,8 +7,8 @@ import pLimit from "p-limit";
 import { Worker } from "worker_threads";
 import net from "net";
 
-const CONTROL_PORT = 9051;
-const CONTROL_PASSWORD = "MiPassword123";
+const CONTROL_PORT = Number(process.env.CONTROL_PORT as string);
+const CONTROL_PASSWORD = process.env.CONTROL_PASSWORD as string;
 
 async function rotateTorIP() {
   return new Promise<void>((resolve, reject) => {
