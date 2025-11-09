@@ -103,7 +103,7 @@ function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched
                 const axiosError = error as AxiosError;
                 if (axiosError.response) {
                     console.warn(`[Worker:${id.toString()}] HTTP ${axiosError.response.status} for ${url}`);
-                    return { fetched: false, data: null };
+                    return resolve({ fetched: false, data: null });
                 }
 
             } else {

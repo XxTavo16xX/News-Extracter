@@ -88,7 +88,7 @@ class News_Extracter {
         while (true) {
 
             const newsAt_Indexed_Content = await Database.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
-            const unfetched_webpages = await newsAt_Indexed_Content.find<Indexed_Content_News>({ fetched: false, failed: false }).sort({ _id: -1 }).limit(batchSize).toArray();
+            const unfetched_webpages = await newsAt_Indexed_Content.find<Indexed_Content_News>({ fetched: false, $or: [ { failed: { $exists: false } }, { failed: false } ] }).sort({ _id: -1 }).limit(batchSize).toArray();
 
             if (unfetched_webpages.length === 0) break;
 
