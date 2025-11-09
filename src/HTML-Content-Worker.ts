@@ -9,7 +9,7 @@ import * as cheerio from "cheerio";
 
 // * Module Required
 
-import TOR_Network_Controller from "./TOR";
+import TOR_Network_Controller from "./Tor";
 import Database from "./Database";
 
 // * Worker Methods
@@ -21,7 +21,7 @@ import Database from "./Database";
     const id = workerData._id as ObjectId;
     const url: string = workerData.url;
 
-    console.log(`[${id}:Worker] Initialized`);
+    console.log(`[${id.toString()}:Worker] Initialized`);
 
     const result = await process_Web_Page(id, url);
 
@@ -62,7 +62,7 @@ function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched
 
         try {
 
-            console.log(`[${id}:Worker] Fetching: ${url}`);
+            console.log(`[${id.toString()}:Worker] Fetching: ${url}`);
 
             if (rotate) await TOR_Network_Controller.rotateTorIP();
 
@@ -76,7 +76,7 @@ function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched
 
             const response = await axios.get(url, { httpAgent: agent, httpsAgent: agent, timeout: 20000, headers: agent_headers });
 
-            console.log(`[${id}:Worker] Fetch Result: ${response.status}`);
+            console.log(`[${id.toString()}:Worker] Fetch Result: ${response.status}`);
 
             if (response.status >= 200 && response.status <= 299) {
 
@@ -103,12 +103,14 @@ function save_HTML_Fetched(id: ObjectId, url: string, fetched_html: any): Promis
 
         try {
 
-            console.log(`[${id}:Worker] Saving Fetched Web Page Content: ${url}`);
-
+            console.log(`[${id.toString()}:Worker] Saving Fetched Web Page Content: ${url}`);
+            
             const { lang, content } = extractContent(fetched_html);
-
+            
             const newsAt_Indexed_Content = await Database.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
             const saveResult = await newsAt_Indexed_Content.insertOne({ _id: id, url, lang, content });
+            
+            console.log(`[${id.toString()}:Worker] Fetched Web Page ${saveResult.acknowledged === true ? "saved successfully" : "wasn't saved"}`);
 
             return resolve({ saved: saveResult.acknowledged });
 
