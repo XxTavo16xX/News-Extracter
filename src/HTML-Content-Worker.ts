@@ -21,7 +21,7 @@ import Database from "./Database";
     const id = new ObjectId(workerData._id);
     const url: string = workerData.url;
 
-    console.log(`[${id.toString()}:Worker] Initialized`);
+    console.log(`[Worker:${id.toString()}] Initialized`);
 
     try {
 
@@ -30,7 +30,7 @@ import Database from "./Database";
 
     } catch (error) {
 
-        console.error(`[${id.toString()}:Worker] Fatal error:`, error);
+        console.error(`[Worker:${id.toString()}] Fatal error:`, error);
         parentPort.postMessage({ fetched: false, saved: false, error: error });
 
     }
@@ -70,7 +70,7 @@ function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched
 
         try {
 
-            console.log(`[${id.toString()}:Worker] Fetching: ${url}`);
+            console.log(`[Worker:${id.toString()}] Fetching: ${url}`);
 
             if (rotate) await TOR_Network_Controller.rotateTorIP();
 
@@ -84,7 +84,7 @@ function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched
 
             const response = await axios.get(url, { httpAgent: agent, httpsAgent: agent, timeout: 20000, headers: agent_headers });
 
-            console.log(`[${id.toString()}:Worker] Fetch Result: ${response.status}`);
+            console.log(`[Worker:${id.toString()}] Fetch Result: ${response.status}`);
 
             if (response.status >= 200 && response.status <= 299) {
 
@@ -102,7 +102,7 @@ function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched
 
                 const axiosError = error as AxiosError;
                 if (axiosError.response) {
-                    console.warn(`[${id.toString()}:Worker] HTTP ${axiosError.response.status} for ${url}`);
+                    console.warn(`[Worker:${id.toString()}] HTTP ${axiosError.response.status} for ${url}`);
                     return { fetched: false, data: null };
                 }
 
@@ -123,17 +123,17 @@ function save_HTML_Fetched(id: ObjectId, url: string, fetched_html: any): Promis
 
         try {
 
-            console.log(`[${id.toString()}:Worker] Extracting Fetched Web Page Content: ${url}`);
+            console.log(`[Worker:${id.toString()}] Extracting Fetched Web Page Content: ${url}`);
 
             const { lang, content } = extractContent(fetched_html);
 
             if (lang !== "unknown" && content != "") {
 
-                console.log(`[${id.toString()}:Worker] Saving Extracted Fetched Web Page Content: ${url}`);
+                console.log(`[Worker:${id.toString()}] Saving Extracted Fetched Web Page Content: ${url}`);
 
                 const newsAt_Indexed_Content = await Database.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
                 const saveResult = await newsAt_Indexed_Content.insertOne({ _id: id, url, lang, content });
-                console.log(`[${id.toString()}:Worker] Status Extracted Fetched Web Page Content ${saveResult.acknowledged === true ? "saved successfully" : "wasn't saved"}`);
+                console.log(`[Worker:${id.toString()}] Status Extracted Fetched Web Page Content ${saveResult.acknowledged === true ? "saved successfully" : "wasn't saved"}`);
 
                 return resolve({ saved: saveResult.acknowledged });
 
