@@ -1,6 +1,9 @@
 
 // * Modules Required
 
-import Dictionary_Contructor from "./Dictionary";
+import News_Extracter from "./New-Extracter";
+// import Dictionary_Contructor from "./Dictionary";
 
-Dictionary_Contructor.init();
+News_Extracter.init();
+
+// Dictionary_Contructor.init();

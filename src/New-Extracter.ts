@@ -148,4 +148,4 @@ class News_Extracter {
 
 }
 
-News_Extracter.init();
+export default News_Extracter
