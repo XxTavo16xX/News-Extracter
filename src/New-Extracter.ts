@@ -85,10 +85,12 @@ class News_Extracter {
 
         const batchSize = this.numWorkers;
 
-        while (this.total_unfetched_pages > 0) {
+        while (true) {
 
             const newsAt_Indexed_Content = await Database.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
             const unfetched_webpages = await newsAt_Indexed_Content.find<Indexed_Content_News>({ fetched: false }).sort({ _id: -1 }).limit(batchSize).toArray();
+
+            if (unfetched_webpages.length === 0) break;
 
             const batchPromises = unfetched_webpages.map((news_data, idx) =>
                 this.limit(() => this.run_Worker(news_data))
@@ -96,7 +98,11 @@ class News_Extracter {
 
             await Promise.all(batchPromises);
 
+            console.log(`Batch completed, checking for remaining pages...`);
+
         }
+
+        console.log(`All pages fetched!`);
 
     }
 
@@ -119,11 +125,11 @@ class News_Extracter {
                     this.total_unfetched_pages = Math.max(this.total_unfetched_pages - 1, 0);
 
                     console.log(`[Worker:${unfetched_webpage._id}] Completed. Remaining pages: ${this.total_unfetched_pages}`);
-                    
+
                     resolve(msg);
-                    
-                }else {
-                    
+
+                } else {
+
                     console.log(`[Worker:${unfetched_webpage._id}] Unable to Fetch Web page content.`);
 
                 }
