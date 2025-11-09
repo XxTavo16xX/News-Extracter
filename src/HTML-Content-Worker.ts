@@ -30,17 +30,15 @@ const sharedAgent = proxyUrl ? new SocksProxyAgent(proxyUrl) : undefined;
 
         await Database.init(process.env.MONGODB_URL as string);
         const result = await process_Web_Page(id, url);
+
+        Database.get_Instance().close();
+        
         parentPort.postMessage(result);
 
     } catch (error) {
 
         console.error(`[Worker:${id.toString()}] Fatal error:`, error);
         parentPort.postMessage({ fetched: false, saved: false, error: error });
-
-    } finally {
-
-        const db = Database.get_Instance();
-        await db.close();
 
     }
 
