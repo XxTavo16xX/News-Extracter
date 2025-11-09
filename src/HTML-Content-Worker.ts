@@ -15,21 +15,20 @@ import Database from "./Database";
 const proxyUrl = process.env.SOCKS_PROXY as string;
 const sharedAgent = proxyUrl ? new SocksProxyAgent(proxyUrl) : undefined;
 
-const db = new Database();
-
 // * Worker Methods
 
 (async () => {
-
+    
     if (!parentPort) return;
-
+    
     const id = new ObjectId(workerData._id);
     const url: string = workerData.url;
-
+    
     console.log(`[Worker:${id.toString()}] Initialized`);
-
+    
     try {
-
+        
+        await Database.init(process.env.MONGODB_URL as string);
         const result = await process_Web_Page(id, url);
         parentPort.postMessage(result);
 
@@ -136,6 +135,7 @@ function save_HTML_Fetched(id: ObjectId, url: string, fetched_html: any): Promis
 
                 console.log(`[Worker:${id.toString()}] Saving Extracted Fetched Web Page Content: ${url}`);
 
+                const db = Database.get_Instance();
                 const newsAt_Indexed_Content = await db.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
                 const saveResult = await newsAt_Indexed_Content.insertOne({ _id: id, url, lang, content });
                 console.log(`[Worker:${id.toString()}] Status Extracted Fetched Web Page Content ${saveResult.acknowledged === true ? "saved successfully" : "wasn't saved"}`);
