@@ -26,9 +26,14 @@ class News_Extracter {
 
     private static numWorkers: number = 0;
     private static total_unfetched_pages: number = 0;
-    private static limit = pLimit(1);
+    private static limit: ReturnType<typeof pLimit> = pLimit(1);
+    private static activeWorkers: Set<Worker> = new Set();
 
     public static async init() {
+
+        // * Initializing Database Connection
+
+        await Database.init(process.env.MONGODB_URL as string);
 
         // * Getting Device Specs
 
@@ -37,6 +42,10 @@ class News_Extracter {
         // * Reading File
 
         await this.get_URLs_To_Fetch_List();
+
+        // graceful shutdown
+        process.on("SIGINT", async () => { console.log("SIGINT received, shutting down..."); await this.shutdown(); process.exit(0); });
+        process.on("SIGTERM", async () => { console.log("SIGTERM received, shutting down..."); await this.shutdown(); process.exit(0); });
 
         // * Initializing Fetch Process
 
@@ -61,7 +70,8 @@ class News_Extracter {
 
         try {
 
-            const newsAt_Indexed_Content = await Database.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
+            const db = Database.get_Instance();
+            const newsAt_Indexed_Content = await db.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
 
             this.total_unfetched_pages = await newsAt_Indexed_Content.countDocuments({ fetched: false });
 
@@ -87,8 +97,9 @@ class News_Extracter {
 
         while (true) {
 
-            const newsAt_Indexed_Content = await Database.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
-            const unfetched_webpages = await newsAt_Indexed_Content.find<Indexed_Content_News>({ fetched: false, $or: [ { failed: { $exists: false } }, { failed: false } ] }).sort({ _id: -1 }).limit(batchSize).toArray();
+            const db = Database.get_Instance();
+            const newsAt_Indexed_Content = await db.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
+            const unfetched_webpages = await newsAt_Indexed_Content.find<Indexed_Content_News>({ fetched: false, $or: [{ failed: { $exists: false } }, { failed: false }] }).sort({ _id: -1 }).limit(batchSize).toArray();
 
             if (unfetched_webpages.length === 0) break;
 
@@ -103,6 +114,7 @@ class News_Extracter {
         }
 
         console.log(`All pages fetched!`);
+        await this.shutdown();
 
     }
 
@@ -112,51 +124,125 @@ class News_Extracter {
 
             const worker = new Worker(worker_path, { workerData: { ...unfetched_webpage, _id: unfetched_webpage._id.toString() }, execArgv: ["-r", "ts-node/register"] });
 
-            worker.on("message", async (msg: { fetched: boolean, saved: boolean, error?: unknown }) => {
+            try { worker.unref(); } catch (e) { /* no-op if not supported */ }
+            this.activeWorkers.add(worker);
 
-                if (msg.fetched === false) {
+            const cleanup = () => {
+                this.activeWorkers.delete(worker);
+                try {
+                    // attempt terminate in case worker is still alive
+                    worker.terminate().catch(() => { /* ignore */ });
+                } catch (e) { /* ignore */ }
+            };
 
-                    console.log(`[Worker:${unfetched_webpage._id}] Unable to Fetch Web page content. (Blocked by website)`);
+            const onMessage = async (msg: { fetched: boolean, saved: boolean, error?: unknown }) => {
 
-                    const newsAt_Indexed_Content = await Database.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
+                try {
 
-                    await newsAt_Indexed_Content.updateOne({ _id: unfetched_webpage._id }, { $set: { failed: true } });
+                    if (msg.fetched === false) {
 
-                } else if (msg.saved === true) {
+                        console.log(`[Worker:${unfetched_webpage._id}] Unable to Fetch Web page content. (Blocked by website)`);
 
-                    console.log(`[Worker:${unfetched_webpage._id}] Fetched Successfully.`);
+                        const db = Database.get_Instance();
+                        const newsAt_Indexed_Content = await db.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
 
-                    const newsAt_Indexed_Content = await Database.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
+                        await newsAt_Indexed_Content.updateOne({ _id: unfetched_webpage._id }, { $set: { failed: true } });
 
-                    await newsAt_Indexed_Content.updateOne({ _id: unfetched_webpage._id }, { $set: { fetched: true, failed: false } });
+                    } else if (msg.saved === true) {
 
-                    this.total_unfetched_pages = Math.max(this.total_unfetched_pages - 1, 0);
+                        console.log(`[Worker:${unfetched_webpage._id}] Fetched Successfully.`);
 
-                    console.log(`[Worker:${unfetched_webpage._id}] Completed. Remaining pages: ${this.total_unfetched_pages}`);                    
+                        const db = Database.get_Instance();
+                        const newsAt_Indexed_Content = await db.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
+
+                        await newsAt_Indexed_Content.updateOne({ _id: unfetched_webpage._id }, { $set: { fetched: true, failed: false } });
+
+                        this.total_unfetched_pages = Math.max(this.total_unfetched_pages - 1, 0);
+
+                        console.log(`[Worker:${unfetched_webpage._id}] Completed. Remaining pages: ${this.total_unfetched_pages}`);
+
+                    } else {
+
+                        console.log(`[Worker:${unfetched_webpage._id}] Unable to Fetch Web page content.`);
+
+                    }
+
+                    resolve(msg);
+
+                } catch (error) {
+
+                    reject(error);
+
+                } finally {
+                    worker.removeAllListeners();
+                    cleanup();
+                }
+
+            }
+
+            const onError = (err: any) => {
+
+                console.error("Worker error:", err);
+
+                worker.removeAllListeners();
+                cleanup();
+                reject(err);
+
+            }
+
+            const onExit = (code: number) => {
+
+                if (code !== 0) {
+
+                    const err = new Error(`Worker stopped with code ${code}`);
+                    cleanup();
+                    reject(err);
 
                 } else {
 
-                    console.log(`[Worker:${unfetched_webpage._id}] Unable to Fetch Web page content.`);
+                    cleanup();
 
                 }
 
-                resolve(msg);
+            }
 
-            });
-
-            worker.on("error", (err) => {
-                console.error("Worker error:", err);
-                reject(err);
-            });
-
-            worker.on("exit", (code) => {
-                if (code !== 0) reject(new Error(`Worker stopped with code ${code}`));
-            });
+            worker.on("message", onMessage);
+            worker.on("error", onError);
+            worker.on("exit", onExit);
 
         })
 
     }
 
+    private static async shutdown() {
+
+        console.log("Shutting down News_Extracter...");
+        // terminate active workers
+        for (const w of Array.from(this.activeWorkers)) {
+            try {
+
+                await w.terminate();
+
+            } catch (e) { /* ignore */ }
+        }
+
+        this.activeWorkers.clear();
+
+        // close DB
+        try {
+
+            const db = Database.get_Instance();
+            await db.close();
+
+        } catch (e) {
+
+            console.warn("Database close error (may be uninitialized):", e);
+
+        }
+
+        console.log("Shutdown complete.");
+        
+    }
 
 
 }
