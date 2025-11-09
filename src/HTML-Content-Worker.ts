@@ -18,16 +18,16 @@ const sharedAgent = proxyUrl ? new SocksProxyAgent(proxyUrl) : undefined;
 // * Worker Methods
 
 (async () => {
-    
+
     if (!parentPort) return;
-    
+
     const id = new ObjectId(workerData._id);
     const url: string = workerData.url;
-    
+
     console.log(`[Worker:${id.toString()}] Initialized`);
-    
+
     try {
-        
+
         await Database.init(process.env.MONGODB_URL as string);
         const result = await process_Web_Page(id, url);
         parentPort.postMessage(result);
@@ -36,6 +36,11 @@ const sharedAgent = proxyUrl ? new SocksProxyAgent(proxyUrl) : undefined;
 
         console.error(`[Worker:${id.toString()}] Fatal error:`, error);
         parentPort.postMessage({ fetched: false, saved: false, error: error });
+
+    } finally {
+
+        const db = Database.get_Instance();
+        await db.close();
 
     }
 
