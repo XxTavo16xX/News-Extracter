@@ -28,10 +28,10 @@ const sharedAgent = proxyUrl ? new SocksProxyAgent(proxyUrl) : undefined;
 
     try {
 
-        await Database.init(process.env.MONGODB_URL as string);
+        const database_instance = await Database.init(process.env.MONGODB_URL as string);
         const result = await process_Web_Page(id, url);
 
-        Database.get_Instance().close();
+        await database_instance.close();
         
         parentPort.postMessage(result);
 
