@@ -104,7 +104,7 @@ class News_Extracter {
 
         return new Promise((resolve, reject) => {
 
-            const worker = new Worker(worker_path, { workerData: unfetched_webpage, execArgv: ["-r", "ts-node/register"] });
+            const worker = new Worker(worker_path, { workerData: { ...unfetched_webpage, _id: unfetched_webpage._id.toString() }, execArgv: ["-r", "ts-node/register"] });
 
             worker.on("message", async (msg: { fetched: boolean, saved: boolean, error?: unknown }) => {
 
