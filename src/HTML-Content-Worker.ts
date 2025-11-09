@@ -12,6 +12,11 @@ import * as cheerio from "cheerio";
 import TOR_Network_Controller from "./Tor";
 import Database from "./Database";
 
+const proxyUrl = process.env.SOCKS_PROXY as string;
+const sharedAgent = proxyUrl ? new SocksProxyAgent(proxyUrl) : undefined;
+
+const db = new Database();
+
 // * Worker Methods
 
 (async () => {
@@ -74,7 +79,7 @@ function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched
 
             if (rotate) await TOR_Network_Controller.rotateTorIP();
 
-            const agent = new SocksProxyAgent(process.env.SOCKS_PROXY as string);
+            const agent = sharedAgent;
             const agent_headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
                 "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
@@ -82,7 +87,7 @@ function fetchPage(id: ObjectId, url: string, rotate = false): Promise<{ fetched
                 "Connection": "keep-alive"
             }
 
-            const response = await axios.get(url, { httpAgent: agent, httpsAgent: agent, timeout: 20000, headers: agent_headers });
+            const response = await axios.get(url, { httpAgent: agent, httpsAgent: agent, timeout: 20000, headers: agent_headers, responseType: "text" });
 
             console.log(`[Worker:${id.toString()}] Fetch Result: ${response.status}`);
 
@@ -131,7 +136,7 @@ function save_HTML_Fetched(id: ObjectId, url: string, fetched_html: any): Promis
 
                 console.log(`[Worker:${id.toString()}] Saving Extracted Fetched Web Page Content: ${url}`);
 
-                const newsAt_Indexed_Content = await Database.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
+                const newsAt_Indexed_Content = await db.get_Connection(process.env.fetched_Content as string, process.env.fetched_Content_News_Collection as string);
                 const saveResult = await newsAt_Indexed_Content.insertOne({ _id: id, url, lang, content });
                 console.log(`[Worker:${id.toString()}] Status Extracted Fetched Web Page Content ${saveResult.acknowledged === true ? "saved successfully" : "wasn't saved"}`);
 
