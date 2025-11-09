@@ -1,22 +1,10 @@
 
-export interface Indexed_New {
-    _id: string;
-    title: string;
-    description: string;
-    image: string;
-    url: string;
-    domain: string;
-    lastmod: number;
-    views: number;
-    _type: "log";
-}
+// * Dependencies Required
 
-export type Indexed_News_File_Content = { content: Indexed_New[] }
+import { ObjectId } from "mongodb";
 
-export interface ExtractedDoc {
+export interface Indexed_Content_News {
+    _id: ObjectId;
     url: string;
-    lang: string | null;
-    content: string;
-    fetchedAt: string;
-    status: number;
+    fetched: false
 }

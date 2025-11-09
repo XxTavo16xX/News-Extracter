@@ -1,48 +1,33 @@
 
 // * Dependencies Required
 
+import { ObjectId } from "mongodb";
+import path from "path";
 import fs from "fs";
 import os from "os";
 import pLimit from "p-limit";
 import { Worker } from "worker_threads";
-import net from "net";
 
-const CONTROL_PORT = Number(process.env.CONTROL_PORT as string);
-const CONTROL_PASSWORD = process.env.CONTROL_PASSWORD as string;
+// * Modules Required
 
-async function rotateTorIP() {
-  return new Promise<void>((resolve, reject) => {
-    const socket = net.connect(CONTROL_PORT, "127.0.0.1", () => {
-      socket.write(`AUTHENTICATE "${CONTROL_PASSWORD}"\r\n`);
-      socket.write("SIGNAL NEWNYM\r\n");
-      socket.write("QUIT\r\n");
-      socket.end();
-      resolve();
-    });
-    socket.on("error", reject);
-  });
-}
-
+import Database from "./Database";
 
 // * Types and Interfaces Required
 
-import { Indexed_News_File_Content } from "./types";
-import path from "path";
+import { Indexed_Content_News } from "./types";
 
 // * Const Required
 
-const news_file_path = process.env.NEWS_FILE_PATH as string;
 const worker_path = process.env.WORKER_PATH as string;
 const outputDir = process.env.NEWS_FILES_OUTPUT_PATH as string;
 
+// * Exported Module 
 
 class News_Extracter {
 
     private static numWorkers: number = 0;
-    private static total_news: number = 0;
+    private static total_unfetched_pages: number = 0;
     private static limit = pLimit(1);
-
-    private static file_news_content: Indexed_News_File_Content = { content: [] };
 
     public static init() {
 
@@ -52,17 +37,9 @@ class News_Extracter {
 
         // * Reading File
 
-        this.read_File();
+        this.get_URLs_To_Fetch_List();
 
-        console.log(``);
-        console.log(``);
-        console.log(`News Extracter will be usign: ${this.numWorkers} cores.`);
-        console.log(``);
-        console.log(``);
-        console.log(`${news_file_path} File Loaded Successfully: ${this.total_news} Sites to procesate`);
-        console.log(``);
-        console.log(``);
-        console.log(`Starting Parallelism Work`);
+        // * Initializing Fetch Process
 
         this.start_Parallelism_Work();
 
@@ -75,16 +52,23 @@ class News_Extracter {
         this.numWorkers = ((os.cpus().length / 4) * 3);
         this.limit = pLimit(this.numWorkers);
 
+        console.log(``);
+        console.log(`News Extracter will be usign: ${this.numWorkers} cores.`);
+        console.log(``);
+
     }
 
-    private static read_File() {
+    private static async get_URLs_To_Fetch_List() {
 
         try {
 
-            const file_Content = fs.readFileSync(news_file_path, 'utf-8');
+            const newsAt_Indexed_Content = await Database.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
 
-            this.file_news_content = JSON.parse(file_Content);
-            this.total_news = this.file_news_content.content.length;
+            this.total_unfetched_pages = await newsAt_Indexed_Content.countDocuments({ fetched: false });
+
+            console.log(``);
+            console.log(`${this.total_unfetched_pages} Unfetched Web Pages Found at DB.`);
+            console.log(``);
 
         } catch (error) {
 
@@ -96,36 +80,36 @@ class News_Extracter {
 
     private static async start_Parallelism_Work() {
 
+        console.log(``);
+        console.log(`Starting Parallelism Work`);
+        console.log(``);
+
         const batchSize = this.numWorkers;
-        const total = this.file_news_content.content.length;
 
-        for (let i = 0; i < total; i += batchSize) {
-            const batch = this.file_news_content.content.slice(i, i + batchSize);
+        while (this.total_unfetched_pages > 0) {
 
-            console.log(`\n[Main] Rotating TOR IP for batch ${i / batchSize + 1}`);
-            await rotateTorIP();
+            const newsAt_Indexed_Content = await Database.get_Connection(process.env.indexed_Content as string, process.env.indexed_Content_News_Collection as string);
+            const unfetched_webpages = await newsAt_Indexed_Content.find<Indexed_Content_News>({ fetched: false }).sort({ _id: -1 }).limit(batchSize).toArray();
 
-            const batchPromises = batch.map((news_data, idx) =>
-                this.limit(() => this.run_Worker(news_data.url, i + idx))
+            const batchPromises = unfetched_webpages.map((news_data, idx) =>
+                this.limit(() => this.run_Worker(news_data))
             );
 
             await Promise.all(batchPromises);
-            console.log(`[Main] Batch ${i / batchSize + 1} completed\n`);
+
         }
-
-
 
     }
 
-    private static run_Worker(news_url: string, news_data_index: number): Promise<unknown> {
+    private static run_Worker(unfetched_webpage: { _id: ObjectId, url: string, fetched: boolean }): Promise<unknown> {
 
         return new Promise((resolve, reject) => {
 
-            const worker = new Worker(worker_path, { workerData: { url: news_url }, execArgv: ["-r", "ts-node/register"] });
+            const worker = new Worker(worker_path, { workerData: unfetched_webpage, execArgv: ["-r", "ts-node/register"] });
 
             worker.on("message", (msg) => {
 
-                const outputFile = path.join(outputDir, `news_${news_data_index}.json`);
+                const outputFile = path.join(outputDir, `news_${unfetched_webpage._id}.json`);
                 fs.writeFileSync(outputFile, JSON.stringify(msg, null, 2), "utf-8");
                 resolve(msg);
 
