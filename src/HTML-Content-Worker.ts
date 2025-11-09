@@ -18,7 +18,7 @@ import Database from "./Database";
 
     if (!parentPort) return;
 
-    const id = workerData._id as ObjectId;
+    const id = new ObjectId(workerData._id);
     const url: string = workerData.url;
 
     console.log(`[${id.toString()}:Worker] Initialized`);
